@@ -3,6 +3,7 @@ from agent_canary.schemas.approval_request import (
     ApprovalDecisionRequest,
     ApprovalRequestRead,
 )
+from agent_canary.schemas.audit_log import AuditLogRead
 from agent_canary.schemas.demo_seed import DemoSeedResponse
 from agent_canary.schemas.evaluation_result import (
     CitationCoverageMetric,
@@ -56,6 +57,7 @@ __all__ = [
     "AgentToolCall",
     "ApprovalDecisionRequest",
     "ApprovalRequestRead",
+    "AuditLogRead",
     "DemoSeedResponse",
     "EvaluationResultRead",
     "CitationCoverageMetric",

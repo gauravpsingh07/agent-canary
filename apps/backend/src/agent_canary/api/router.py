@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from agent_canary.api.routes.approvals import router as approvals_router
+from agent_canary.api.routes.audit import router as audit_router
 from agent_canary.api.routes.evaluation import router as evaluation_router
 from agent_canary.api.routes.health import router as health_router
 from agent_canary.api.routes.policy import router as policy_router
@@ -22,3 +23,4 @@ api_router.include_router(policy_router)
 api_router.include_router(evaluation_router)
 api_router.include_router(approvals_router)
 api_router.include_router(rag_router)
+api_router.include_router(audit_router)
