@@ -1,96 +1,71 @@
 # Agent Canary
 
-Agent Canary is a portfolio-grade AI agent evaluation and safety testing platform. It is designed to stress-test AI agents against prompt injection, unsafe tool calls, invalid structured outputs, weak retrieval, stale context, poor grounding, missing approval flows, and policy bypass attempts before those agents are trusted in production.
+Agent Canary is a live AI agent evaluation and safety testing platform for stress-testing agents before they are trusted in production. It checks prompt injection resistance, unsafe tool calls, invalid structured outputs, weak retrieval, stale context, hallucinated claims, missing approval flows, policy bypass attempts, and RAG citation behavior.
 
-This repository is being built phase by phase from `docs/project-spec.md`. The current implementation includes the Phase 1 through Phase 10 backend foundation.
+The project is built as a portfolio-grade AI infrastructure app rather than a generic chatbot. It demonstrates backend AI engineering, stateful agent workflows, structured validation, simulated tool execution, human review, audit logging, RAG failure testing, and an operational dashboard.
+
+## Status
+
+Implemented through Phase 12 locally:
+
+- FastAPI backend with SQLAlchemy, Alembic, Pydantic, Ruff, mypy, and pytest
+- Next.js dashboard with TypeScript, Tailwind CSS, shadcn-style components, lucide icons, and Recharts
+- LangGraph evaluation workflow with persisted test-run steps
+- LLM provider abstraction for mock, Gemini, Groq, and optional OpenAI
+- Mock provider for deterministic tests and demos
+- Simulated tool registry and JSON Schema tool-call validation
+- Rule-based policy engine for unsafe autonomous actions
+- Evaluation scoring for schema validity, tool safety, policy compliance, approval correctness, refusal correctness, groundedness, prompt injection resistance, and overall score
+- Human approval queue with approve/reject APIs and audit events
+- RAG document ingestion, chunking, embeddings, retrieval results, and pgvector-ready persistence
+- RAG failure evaluation for weak retrieval, stale context, unsupported claims, and citations
+- Metrics APIs and dashboard charts
+- GitHub Actions CI for backend and frontend validation
+- Deployment documentation for Vercel, Render, and Supabase
 
 ## Why It Matters
 
-Production AI systems fail in ways that are different from traditional web apps: malformed structured output, unsafe tool calls, weak retrieval, hallucinated claims, missing citations, and autonomous actions that should have required review. Agent Canary is meant to demonstrate backend AI engineering around those failure modes rather than another thin chatbot UI.
+Production AI agents fail in ways traditional CRUD apps do not: they may follow malicious instructions, invent facts, call risky tools, skip approval gates, emit malformed JSON, or answer from weak retrieval. Agent Canary makes those failure modes visible and measurable through repeatable test suites, policy checks, scoring, audit logs, and dashboards.
 
-## Target Engineering Concepts
+## Core Concepts Demonstrated
 
-- FastAPI web services
-- SQLAlchemy persistence and Alembic migrations
-- Pydantic configuration and validation
-- LLM provider abstractions
+- AI agent evaluation
 - LangGraph workflow orchestration
-- Simulated tool calling and policy checks
-- RAG document ingestion, embeddings, retrieval, and Supabase pgvector
-- Audit logging, test execution history, and evaluation metrics
-- Dockerized backend deployment
-
-## Current Scope
-
-Implemented so far:
-
-- Monorepo structure with `apps/backend`, `apps/frontend`, `docs`, and `.github/workflows`
-- FastAPI backend app
-- `GET /health`
-- Environment-based settings
-- SQLAlchemy base metadata and session setup
-- Alembic migration scaffold
-- Foundation models:
-  - `projects`
-  - `test_suites`
-  - `test_cases`
-  - `test_runs`
-  - `audit_logs`
-- Backend Dockerfile
-- Pytest setup
-- `.gitignore`
-- `.env.example`
-- CRUD APIs for projects
-- CRUD APIs for test suites
-- CRUD APIs for test cases
-- seeded demo test suites and cases
-- audit logging for create/update actions
-- LLM provider abstraction
-- deterministic `MockLLMProvider` for tests and demos
-- Gemini, Groq, and optional OpenAI provider adapters configured through environment variables
-- tool registry table and APIs
-- default simulated tools such as `send_email`, `delete_user`, and `refund_payment`
-- JSON Schema validation for proposed tool-call arguments
-- Pydantic request/response validation for tool definitions and tool calls
-- policy rule table and APIs
-- deterministic policy evaluation for proposed tool calls
-- approval-required and blocking violation logic
-- optional persistence of policy violations
-- LangGraph-based test-case execution workflow
-- persisted test-run steps for each workflow node
-- test-run execution APIs for individual cases and full suites
-- evaluation result table and APIs
-- component scoring for schema validity, tool safety, policy compliance, approval correctness, refusal correctness, groundedness, and prompt-injection resistance
-- metrics APIs for summary stats, failures by category, provider latency, and policy violations
-- human review approval request table and APIs
-- workflow-created approval requests for failed, blocked, approval-gated, or high-risk runs
-- approve/reject decisions with reviewer notes and audit logs
-- RAG document, chunk, retrieval result, and ingestion job tables
-- text normalization and chunking service
-- embedding provider abstraction with mock, Gemini, and OpenAI providers
-- pgvector-ready migration and vector retrieval pipeline
-- document ingestion and retrieval APIs
-- audit logs for document ingestion and retrieval
-- seeded RAG documents and RAG failure test cases
-- retrieval evidence integrated into the LangGraph evaluation workflow
-- groundedness checks for weak retrieval, stale context, unsupported claims, and citations
-- retrieval quality and citation coverage metrics
-
-Not included yet:
-
-- frontend dashboard
+- LLM provider adapters
+- Structured output validation
+- Simulated tool calling
+- Policy enforcement for autonomous actions
+- Human-in-the-loop review
+- RAG ingestion and retrieval failure testing
+- Audit logging and metrics
+- Full-stack AI product architecture
+- CI, Docker, and deployment planning
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    User[User] --> Frontend[Next.js dashboard - later phase]
-    Frontend --> API[FastAPI backend]
+    User[User] --> Frontend[Next.js Dashboard]
+    Frontend --> API[FastAPI API]
     API --> DB[(Supabase Postgres)]
-    API --> Audit[Audit logs]
-    API --> Eval[LangGraph evaluation workflows]
-    Eval --> LLM[LLM providers]
-    Eval --> Vector[pgvector retrieval]
+    API --> Audit[Audit Logs]
+    API --> Tools[Simulated Tool Registry]
+    API --> Policy[Policy Engine]
+    API --> Eval[LangGraph Evaluation Workflow]
+    Eval --> LLM[Mock, Gemini, Groq, OpenAI]
+    Eval --> RAG[RAG Retrieval]
+    RAG --> Vector[pgvector-ready Chunks]
+    Eval --> Review[Human Approval Queue]
+```
+
+## Monorepo Layout
+
+```text
+apps/
+  backend/       FastAPI, SQLAlchemy, Alembic, LangGraph, pytest
+  frontend/      Next.js, TypeScript, Tailwind, Recharts
+docs/            project spec and deployment/architecture docs
+.github/         CI workflows
 ```
 
 ## Tech Stack
@@ -100,7 +75,8 @@ Frontend:
 - Next.js
 - TypeScript
 - Tailwind CSS
-- shadcn/ui
+- shadcn-style local UI components
+- lucide-react
 - Recharts
 
 Backend:
@@ -110,293 +86,187 @@ Backend:
 - Pydantic
 - SQLAlchemy
 - Alembic
+- LangGraph
 - pytest
 - Ruff
 - mypy
 
-Database and AI workflow:
+Database and AI:
 
 - Supabase Postgres
-- Supabase pgvector
-- LangGraph
-- Gemini, Groq, optional OpenAI, and mock providers
+- pgvector-ready migrations
+- Gemini and Groq adapters
+- optional OpenAI adapter
+- deterministic mock LLM and embedding providers
 
 ## Local Setup
 
-Create a local environment file from the example:
+Create an environment file:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Install the backend in editable mode:
+Install backend dependencies:
 
 ```powershell
 cd apps/backend
 python -m pip install -e ".[dev]"
 ```
 
-Run tests:
+Install frontend dependencies:
 
 ```powershell
-python -m pytest
+cd apps/frontend
+npm ci
 ```
 
-Run the backend locally:
-
-```powershell
-uvicorn agent_canary.main:app --reload
-```
-
-Then visit:
-
-```text
-http://127.0.0.1:8000/health
-http://127.0.0.1:8000/docs
-```
-
-## Environment Variables
-
-Documented in `.env.example`:
-
-- `DATABASE_URL`
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL`
-- `GROQ_API_KEY`
-- `GROQ_MODEL`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `LLM_PROVIDER`
-- `MOCK_LLM_MODEL`
-- `LLM_TIMEOUT_SECONDS`
-- `EMBEDDING_PROVIDER`
-- `MOCK_EMBEDDING_MODEL`
-- `GEMINI_EMBEDDING_MODEL`
-- `OPENAI_EMBEDDING_MODEL`
-- `EMBEDDING_DIMENSION`
-- `EMBEDDING_TIMEOUT_SECONDS`
-- `RAG_CHUNK_MAX_CHARS`
-- `RAG_CHUNK_OVERLAP_CHARS`
-- `RETRIEVAL_DEFAULT_MIN_SCORE`
-- `RETRIEVAL_DEFAULT_MAX_RESULTS`
-- `JWT_SECRET`
-- `CORS_ORIGINS`
-- `REDIS_URL`
-- `APP_ENV`
-
-## Database Migrations
-
-From `apps/backend`:
+Run database migrations from `apps/backend`:
 
 ```powershell
 alembic upgrade head
 ```
 
-The migrations currently create the backend foundation, tool registry, policy, workflow step, evaluation result, approval request, RAG document, RAG chunk, retrieval result, and document ingestion job tables. The RAG migration enables the Postgres `vector` extension and adds a pgvector-ready `embedding_vector` column for chunk embeddings.
-
-## Core API Endpoints
-
-Available now:
-
-- `GET /health`
-- `GET /projects`
-- `POST /projects`
-- `GET /projects/{project_id}`
-- `PUT /projects/{project_id}`
-- `DELETE /projects/{project_id}`
-- `POST /projects/{project_id}/seed-demo-data`
-- `GET /projects/{project_id}/test-suites`
-- `POST /projects/{project_id}/test-suites`
-- `GET /test-suites/{suite_id}`
-- `PUT /test-suites/{suite_id}`
-- `DELETE /test-suites/{suite_id}`
-- `GET /test-suites/{suite_id}/test-cases`
-- `POST /test-suites/{suite_id}/test-cases`
-- `GET /test-cases/{test_case_id}`
-- `PUT /test-cases/{test_case_id}`
-- `DELETE /test-cases/{test_case_id}`
-- `GET /tools`
-- `POST /tools`
-- `POST /tools/seed-defaults`
-- `POST /tools/validate-call`
-- `GET /tools/{tool_id}`
-- `PUT /tools/{tool_id}`
-- `DELETE /tools/{tool_id}`
-- `GET /policy-rules`
-- `POST /policy-rules`
-- `POST /policy-rules/seed-defaults`
-- `GET /policy-rules/{rule_id}`
-- `PUT /policy-rules/{rule_id}`
-- `POST /policy/evaluate`
-- `POST /test-cases/{test_case_id}/run`
-- `POST /test-suites/{suite_id}/run`
-- `GET /test-runs`
-- `GET /test-runs/{test_run_id}`
-- `GET /test-runs/{test_run_id}/steps`
-- `GET /evaluation-results`
-- `GET /evaluation-results/{result_id}`
-- `GET /metrics/summary`
-- `GET /metrics/failures-by-category`
-- `GET /metrics/provider-latency`
-- `GET /metrics/policy-violations`
-- `GET /metrics/retrieval-quality`
-- `GET /metrics/citation-coverage`
-- `GET /approval-requests`
-- `GET /approval-requests/{request_id}`
-- `POST /approval-requests/{request_id}/approve`
-- `POST /approval-requests/{request_id}/reject`
-- `POST /projects/{project_id}/seed-rag-demo-data`
-- `POST /rag/documents`
-- `GET /rag/documents`
-- `GET /rag/documents/{document_id}`
-- `GET /rag/documents/{document_id}/chunks`
-- `GET /rag/ingestion-jobs`
-- `POST /rag/retrieve`
-- `GET /rag/retrieval-results/{result_id}`
-
-## LLM Providers
-
-The backend includes a provider interface with:
-
-- `generate_text(prompt, system_prompt, temperature, max_tokens)`
-- `generate_structured(prompt, system_prompt, schema, temperature)`
-- `provider_name`
-- `model_name`
-
-Supported providers:
-
-- `mock`
-- `gemini`
-- `groq`
-- `openai`
-
-Use `LLM_PROVIDER=mock` for local tests and demos without API keys. For live providers, set the matching API key and model name in `.env`. Model names are intentionally environment-driven so the app can follow currently available provider models without code changes.
-
-## Tool Registry
-
-The backend includes a simulated tool registry. Tools define:
-
-- name and description
-- JSON Schema for arguments
-- risk level
-- whether approval is generally required
-- allowed and blocked conditions
-- valid and invalid example calls
-
-`POST /tools/validate-call` checks proposed tool-call arguments against a registered tool's JSON Schema. It does not decide whether a risky tool is allowed, blocked, or approval-gated; that belongs to the policy engine phase.
-
-## Policy Engine
-
-The backend includes a deterministic rule-based policy engine for proposed tool calls. It evaluates:
-
-- unknown or inactive tools
-- JSON Schema validation failures
-- high-value refunds
-- destructive user deletion
-- external email recipients
-- sensitive content
-- sensitive database field updates
-- prompt injection patterns
-- missing evidence or citations when required by test metadata
-
-`POST /policy/evaluate` returns whether a call is allowed, blocked, or requires approval, along with risk level, violation codes, and an explanation. This phase does not execute tools and does not run LangGraph workflows.
-
-## LangGraph Workflow
-
-The backend includes a LangGraph workflow for running a test case through the core evaluation path:
-
-1. `load_test_case`
-2. `retrieve_evidence`
-3. `build_prompt`
-4. `call_llm`
-5. `parse_output`
-6. `validate_schema`
-7. `evaluate_tool_call`
-8. `run_policy`
-9. `score_result`
-10. `create_human_review_if_needed`
-11. `write_audit_log`
-
-Each node writes a `test_run_steps` row with input/output payloads, status, timestamps, and errors. The retrieval node runs for RAG-related categories/tags and stores retrieved evidence in test-run metadata. The `score_result` node persists a full `evaluation_results` row and emits an `EVALUATION_COMPLETED` audit event. The human-review node creates a pending approval request when a run fails, is blocked, requires approval, or reaches high/critical risk.
-
-## Evaluation Scoring and Metrics
-
-The backend includes a deterministic scoring engine that produces:
-
-- `schema_validity_score`
-- `tool_safety_score`
-- `policy_compliance_score`
-- `approval_correctness_score`
-- `refusal_correctness_score`
-- `groundedness_score`
-- `prompt_injection_resistance_score`
-- `overall_score`
-
-Evaluation results include pass/fail status, failure reasons, policy violations, provider/model names, evaluator notes, and model-call latency. Metrics endpoints summarize pass rate, failure rate, average score, high-risk failures, pending approvals, failures by category, provider latency, policy violation frequency, retrieval quality, and citation coverage.
-
-## Human Review and Approvals
-
-The backend includes a simulated human review queue. Approval requests capture:
-
-- the related test run
-- proposed tool call payload
-- risk level
-- review reason
-- pending, approved, or rejected status
-- reviewer note and review timestamp
-
-Approving a request marks the simulated action as allowed in the test run metadata. Rejecting it marks the simulated action as not allowed. Both decisions write immutable audit events.
-
-## RAG Retrieval Pipeline
-
-The backend includes the RAG retrieval and failure-evaluation foundation:
-
-- text normalization and overlapping chunk generation
-- deterministic `MockEmbeddingProvider` for tests and demos
-- Gemini and OpenAI embedding provider adapters configured through environment variables
-- RAG document ingestion with persisted ingestion jobs
-- chunk embeddings stored as JSON plus a pgvector-ready vector literal
-- cosine similarity retrieval with configurable `max_results` and `min_score`
-- persisted retrieval result records
-- audit events for ingestion start/completion/failure and retrieval completion
-- seeded RAG documents for current, stale, and weak support contexts
-- seeded RAG failure test cases
-- citation validation against retrieved document/chunk IDs
-- stale-context warning checks
-- unsupported-claim and weak-retrieval checks
-
-The live demo can be bootstrapped with `POST /projects/{project_id}/seed-rag-demo-data`.
-
-## Docker
-
-Build the backend image:
+Run the backend:
 
 ```powershell
-docker build -t agent-canary-backend apps/backend
+cd apps/backend
+uvicorn agent_canary.main:app --reload
 ```
 
-Run the backend container:
+Run the frontend:
 
 ```powershell
-docker run --env-file .env -p 8000:8000 agent-canary-backend
+cd apps/frontend
+npm run dev
 ```
 
-## Deployment Plan
+Local URLs:
+
+- Frontend: `http://127.0.0.1:3000`
+- Backend health: `http://127.0.0.1:8000/health`
+- API docs: `http://127.0.0.1:8000/docs`
+
+## Environment Variables
+
+The full local reference is in `.env.example`.
+
+Important backend variables:
+
+- `DATABASE_URL`
+- `APP_ENV`
+- `APP_DEBUG`
+- `JWT_SECRET`
+- `CORS_ORIGINS`
+- `LLM_PROVIDER`
+- `GEMINI_API_KEY`
+- `GROQ_API_KEY`
+- `OPENAI_API_KEY`
+- `EMBEDDING_PROVIDER`
+- `REDIS_URL`
+
+Important frontend variable:
+
+- `NEXT_PUBLIC_API_BASE_URL`
+
+Use `LLM_PROVIDER=mock` and `EMBEDDING_PROVIDER=mock` for deterministic local demos without paid API calls.
+
+## Validation
+
+Backend:
+
+```powershell
+cd apps/backend
+python -m ruff check src tests
+python -m mypy src
+python -m pytest -p no:cacheprovider --disable-warnings
+```
+
+Frontend:
+
+```powershell
+cd apps/frontend
+npm run typecheck
+npm run build
+```
+
+CI runs these checks on pushes and pull requests to `main`.
+
+## Seeded Demo Flow
+
+1. Create a project in the dashboard or through `POST /projects`.
+2. Seed adversarial evaluation cases with `POST /projects/{project_id}/seed-demo-data`.
+3. Seed RAG documents and RAG failure cases with `POST /projects/{project_id}/seed-rag-demo-data`.
+4. Seed simulated tools with `POST /tools/seed-defaults`.
+5. Seed policy rules with `POST /policy-rules/seed-defaults`.
+6. Run a test suite from the dashboard.
+7. Review results, workflow steps, policy violations, metrics, audit logs, and approval requests.
+
+## Core API Areas
+
+- Health: `/health`
+- Projects: `/projects`
+- Test suites: `/projects/{project_id}/test-suites`, `/test-suites/{suite_id}`
+- Test cases: `/test-suites/{suite_id}/test-cases`, `/test-cases/{test_case_id}`
+- Test runs: `/test-cases/{test_case_id}/run`, `/test-suites/{suite_id}/run`, `/test-runs`
+- Tools: `/tools`, `/tools/seed-defaults`, `/tools/validate-call`
+- Policy: `/policy-rules`, `/policy-rules/seed-defaults`, `/policy/evaluate`
+- Evaluation: `/evaluation-results`, `/metrics/summary`, `/metrics/failures-by-category`
+- Approvals: `/approval-requests`
+- Audit: `/audit-logs`
+- RAG: `/rag/documents`, `/rag/retrieve`, `/rag/retrieval-results/{result_id}`
+
+## Dashboard Pages
+
+- Overview
+- Projects
+- Test suites
+- Test runs and run detail
+- Policy rules
+- Tool registry
+- Approval queue
+- Audit logs
+- RAG documents
+- Retrieval results
+- Metrics
+
+## Documentation
+
+- `docs/project-spec.md`
+- `docs/deployment.md`
+- `docs/architecture.md`
+- `docs/data-pipeline.md`
+- `docs/rag-pipeline.md`
+- `docs/screenshots.md`
+- `docs/production-env.md`
+
+## Deployment Targets
 
 - Frontend: Vercel
 - Backend: Render
 - Database: Supabase Postgres
-- Optional queue/cache: Upstash Redis
+- Optional background jobs: Upstash Redis
+
+See `docs/deployment.md` and `docs/production-env.md` for deployment steps and environment variable checklists.
 
 ## Screenshots
 
-Screenshots will be added after the dashboard phase.
+Screenshot placeholders are tracked in `docs/screenshots.md`. Add final images after the live deployment is seeded with demo data.
 
 ## Future Improvements
 
-- frontend dashboard
-- CI and deployment documentation
+- Async background queue with Upstash Redis and RQ
+- More provider adapters and model comparison reports
+- Saved failure reports and replay workflows
+- Organization/user auth
+- pgvector similarity search tuned against larger corpora
+- Playwright end-to-end dashboard tests
+- Exportable evaluation reports
 
-## Resume Direction
+## Resume Bullets This Project Supports
 
-When complete, Agent Canary should support resume bullets around production AI evaluation, LangGraph orchestration, structured output validation, simulated tool safety, policy checks, human approval workflows, audit logging, RAG evaluation, embeddings, vector search, and deployment-ready FastAPI services.
+- Built Agent Canary, a full-stack AI agent evaluation platform using Next.js, FastAPI, Supabase Postgres, LangGraph, and Gemini/Groq provider adapters to test agents against prompt injection, unsafe tool calls, structured output failures, and RAG failures.
+- Implemented a LangGraph evaluation workflow that runs adversarial test cases, validates model-generated tool calls with Pydantic and JSON Schema, applies policy rules, scores behavior, and persists step-level audit logs.
+- Designed an AI safety scoring system for schema validity, tool safety, policy compliance, approval correctness, groundedness, latency, and overall reliability.
+- Built a human-in-the-loop approval workflow for risky agent actions with approval queues, approve/reject APIs, reviewer notes, and immutable audit history.
+- Added RAG failure tests to detect weak retrieval, stale context, unsupported claims, and missing citations before AI-generated answers are considered safe.
