@@ -239,6 +239,7 @@ CI runs these checks on pushes and pull requests to `main`.
 - `docs/rag-pipeline.md`
 - `docs/screenshots.md`
 - `docs/production-env.md`
+- `docs/portfolio-notes.md`
 
 ## Deployment Targets
 
