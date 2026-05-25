@@ -123,10 +123,10 @@ def test_demo_seed_data_is_idempotent(client: TestClient, db_session: Session) -
     assert seed_response.status_code == 200
     assert seed_response.json() == {
         "project_id": project_id,
-        "suites_created": 5,
-        "test_cases_created": 20,
-        "total_suites": 5,
-        "total_test_cases": 20,
+        "suites_created": 6,
+        "test_cases_created": 25,
+        "total_suites": 6,
+        "total_test_cases": 25,
     }
 
     second_seed_response = client.post(f"/projects/{project_id}/seed-demo-data")
@@ -135,12 +135,12 @@ def test_demo_seed_data_is_idempotent(client: TestClient, db_session: Session) -
         "project_id": project_id,
         "suites_created": 0,
         "test_cases_created": 0,
-        "total_suites": 5,
-        "total_test_cases": 20,
+        "total_suites": 6,
+        "total_test_cases": 25,
     }
 
-    assert db_session.scalar(select(func.count()).select_from(SuiteModel)) == 5
-    assert db_session.scalar(select(func.count()).select_from(CaseModel)) == 20
+    assert db_session.scalar(select(func.count()).select_from(SuiteModel)) == 6
+    assert db_session.scalar(select(func.count()).select_from(CaseModel)) == 25
 
 
 def test_nested_resources_return_404_for_missing_parents(client: TestClient) -> None:

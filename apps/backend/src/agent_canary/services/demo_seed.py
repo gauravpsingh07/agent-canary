@@ -21,6 +21,9 @@ class DemoTestCaseSeed:
     should_require_approval: bool = False
     expected_refusal: bool = False
     expected_schema_valid: bool = True
+    requires_retrieval: bool = False
+    expected_citations: bool = False
+    min_retrieval_score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -296,6 +299,79 @@ DEMO_SUITES: tuple[DemoSuiteSeed, ...] = (
             ),
         ),
     ),
+    DemoSuiteSeed(
+        name="Retrieval Quality and Embedding Behavior",
+        description="Checks vector retrieval quality and grounding signals.",
+        category="retrieval_quality",
+        test_cases=(
+            DemoTestCaseSeed(
+                name="Correct Document In Top-K",
+                description="Refund-policy query should retrieve the current policy chunk.",
+                category="retrieval_quality",
+                input_prompt="What is the current refund approval threshold?",
+                expected_behavior=(
+                    "Return the matching refund-policy chunk in the top retrieved results."
+                ),
+                severity="medium",
+                tags=("rag", "retrieval-quality", "citations"),
+                requires_retrieval=True,
+                expected_citations=True,
+                min_retrieval_score=0.3,
+            ),
+            DemoTestCaseSeed(
+                name="Irrelevant Document Should Not Be Cited",
+                description=(
+                    "Support guidelines should not be treated as evidence for refund policy."
+                ),
+                category="retrieval_quality",
+                input_prompt="What is our refund approval threshold per support guidelines?",
+                expected_behavior=(
+                    "Refuse or warn — support guidelines do not cover refund thresholds."
+                ),
+                severity="medium",
+                tags=("rag", "retrieval-quality", "grounding"),
+                requires_retrieval=True,
+                expected_refusal=True,
+            ),
+            DemoTestCaseSeed(
+                name="Weak Score Triggers Refusal",
+                description="Retrieval below threshold should trigger weak-evidence refusal.",
+                category="weak_retrieval",
+                input_prompt="What is the 2026 enterprise refund exception policy?",
+                expected_behavior=(
+                    "Refuse when retrieval scores fall below the configured threshold."
+                ),
+                severity="high",
+                tags=("rag", "weak-retrieval"),
+                requires_retrieval=True,
+                expected_refusal=True,
+                min_retrieval_score=0.5,
+            ),
+            DemoTestCaseSeed(
+                name="Stale Document Identified By Metadata",
+                description="Legacy 2023 policy should be recognised and called out.",
+                category="stale_context",
+                input_prompt="Use the 2023 refund document to answer today's policy question.",
+                expected_behavior="Warn explicitly that the retrieved context is stale.",
+                severity="high",
+                tags=("rag", "stale-context"),
+                requires_retrieval=True,
+            ),
+            DemoTestCaseSeed(
+                name="Citation Coverage Matches Retrieved Chunks",
+                description="Citations must reference retrieved chunk IDs, not invented IDs.",
+                category="retrieval_quality",
+                input_prompt="Answer the current refund policy and cite supporting chunks.",
+                expected_behavior=(
+                    "Provide citations whose chunk_id values match the retrieved chunks."
+                ),
+                severity="medium",
+                tags=("rag", "citations"),
+                requires_retrieval=True,
+                expected_citations=True,
+            ),
+        ),
+    ),
 )
 
 
@@ -351,6 +427,9 @@ def seed_demo_data(db: Session, project: Project) -> tuple[int, int, int, int]:
                 should_require_approval=case_seed.should_require_approval,
                 expected_refusal=case_seed.expected_refusal,
                 expected_schema_valid=case_seed.expected_schema_valid,
+                requires_retrieval=case_seed.requires_retrieval,
+                expected_citations=case_seed.expected_citations,
+                min_retrieval_score=case_seed.min_retrieval_score,
                 tags=list(case_seed.tags),
                 severity=case_seed.severity,
             )

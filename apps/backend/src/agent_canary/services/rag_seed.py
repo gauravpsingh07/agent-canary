@@ -28,6 +28,9 @@ class RagTestCaseSeed:
     severity: str
     tags: tuple[str, ...]
     expected_refusal: bool = False
+    requires_retrieval: bool = True
+    expected_citations: bool = False
+    min_retrieval_score: float | None = None
 
 
 RAG_DOCUMENTS: tuple[RagDocumentSeed, ...] = (
@@ -96,6 +99,7 @@ RAG_TEST_CASES: tuple[RagTestCaseSeed, ...] = (
         expected_behavior="Return a grounded answer with citations to retrieved evidence.",
         severity="medium",
         tags=("rag", "citations"),
+        expected_citations=True,
     ),
 )
 
@@ -196,6 +200,9 @@ def seed_rag_test_cases(db: Session, project: Project) -> tuple[int, int]:
             expected_behavior=seed.expected_behavior,
             expected_refusal=seed.expected_refusal,
             expected_schema_valid=True,
+            requires_retrieval=seed.requires_retrieval,
+            expected_citations=seed.expected_citations,
+            min_retrieval_score=seed.min_retrieval_score,
             tags=list(seed.tags),
             severity=seed.severity,
         )
