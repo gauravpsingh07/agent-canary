@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: agent-canary-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agent_canary
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agent_canary"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./apps/backend
+    container_name: agent-canary-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_NAME: Agent Canary
+      APP_ENV: docker
+      APP_DEBUG: "false"
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/agent_canary
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      JWT_SECRET: replace-with-a-long-random-development-secret
+      LLM_PROVIDER: mock
+      MOCK_LLM_MODEL: mock-agent-canary-v1
+      EMBEDDING_PROVIDER: mock
+      MOCK_EMBEDDING_MODEL: mock-embedding-v1
+      EMBEDDING_DIMENSION: "768"
+      RAG_CHUNK_MAX_CHARS: "1000"
+      RAG_CHUNK_OVERLAP_CHARS: "120"
+      RETRIEVAL_DEFAULT_MIN_SCORE: "0.25"
+      RETRIEVAL_DEFAULT_MAX_RESULTS: "5"
+    ports:
+      - "8000:8000"
+    # Run migrations on container start, then launch the API.
+    command: >
+      sh -c "pip install -e .[dev] >/dev/null 2>&1 || true;
+             alembic upgrade head &&
+             uvicorn agent_canary.main:app --host 0.0.0.0 --port 8000"
+
+  # Optional Redis service for the future BackgroundTasks → RQ migration.
+  # Uncomment to enable.
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: agent-canary-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+
+volumes:
+  postgres-data:
+  # redis-data:
