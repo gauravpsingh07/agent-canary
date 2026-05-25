@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from agent_canary.models.base import Base, IdMixin, TimestampMixin
@@ -31,6 +31,9 @@ class TestCase(IdMixin, TimestampMixin, Base):
     should_require_approval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expected_refusal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expected_schema_valid: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    requires_retrieval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    expected_citations: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    min_retrieval_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     severity: Mapped[str] = mapped_column(String(40), default="medium", nullable=False)
 

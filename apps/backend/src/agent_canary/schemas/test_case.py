@@ -15,6 +15,9 @@ class TestCaseBase(BaseModel):
     should_require_approval: bool = False
     expected_refusal: bool = False
     expected_schema_valid: bool = True
+    requires_retrieval: bool = False
+    expected_citations: bool = False
+    min_retrieval_score: float | None = Field(default=None, ge=0, le=1)
     tags: list[str] = Field(default_factory=list)
     severity: str = Field(default="medium", min_length=1, max_length=40)
 
@@ -35,6 +38,9 @@ class TestCaseUpdate(BaseModel):
     should_require_approval: bool | None = None
     expected_refusal: bool | None = None
     expected_schema_valid: bool | None = None
+    requires_retrieval: bool | None = None
+    expected_citations: bool | None = None
+    min_retrieval_score: float | None = Field(default=None, ge=0, le=1)
     tags: list[str] | None = None
     severity: str | None = Field(default=None, min_length=1, max_length=40)
 
@@ -46,4 +52,3 @@ class TestCaseRead(TestCaseBase):
     suite_id: str
     created_at: datetime
     updated_at: datetime
-

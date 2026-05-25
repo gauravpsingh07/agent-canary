@@ -6,6 +6,7 @@ from agent_canary.schemas.approval_request import (
 from agent_canary.schemas.audit_log import AuditLogRead
 from agent_canary.schemas.demo_seed import DemoSeedResponse
 from agent_canary.schemas.evaluation_result import (
+    ApprovalOutcomeMetric,
     CitationCoverageMetric,
     EvaluationResultRead,
     FailureByCategoryMetric,
@@ -13,7 +14,9 @@ from agent_canary.schemas.evaluation_result import (
     PolicyViolationMetric,
     ProviderLatencyMetric,
     RetrievalQualityMetric,
+    TimeSeriesPoint,
 )
+from agent_canary.schemas.llm_call import LLMCallRead
 from agent_canary.schemas.policy import (
     PolicyEvaluateRequest,
     PolicyEvaluationResponse,
@@ -43,6 +46,7 @@ from agent_canary.schemas.test_run import (
     TestRunStepRead,
 )
 from agent_canary.schemas.test_suite import TestSuiteCreate, TestSuiteRead, TestSuiteUpdate
+from agent_canary.schemas.tool_call import ToolCallRead
 from agent_canary.schemas.tool_definition import (
     ToolCallValidationRequest,
     ToolCallValidationResponse,
@@ -56,12 +60,14 @@ __all__ = [
     "AgentOutput",
     "AgentToolCall",
     "ApprovalDecisionRequest",
+    "ApprovalOutcomeMetric",
     "ApprovalRequestRead",
     "AuditLogRead",
     "DemoSeedResponse",
     "EvaluationResultRead",
     "CitationCoverageMetric",
     "FailureByCategoryMetric",
+    "LLMCallRead",
     "MetricsSummary",
     "PolicyEvaluateRequest",
     "PolicyEvaluationResponse",
@@ -95,6 +101,8 @@ __all__ = [
     "TestSuiteRead",
     "TestSuiteUpdate",
     "SuiteRunResponse",
+    "TimeSeriesPoint",
+    "ToolCallRead",
     "ToolCallValidationRequest",
     "ToolCallValidationResponse",
     "ToolDefinitionCreate",

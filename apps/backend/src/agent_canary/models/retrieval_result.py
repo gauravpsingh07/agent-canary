@@ -16,6 +16,11 @@ class RetrievalResult(IdMixin, TimestampMixin, Base):
         index=True,
         nullable=True,
     )
+    test_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("test_runs.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     query: Mapped[str] = mapped_column(Text, nullable=False)
     min_score: Mapped[float] = mapped_column(Float, nullable=False)
     max_results: Mapped[int] = mapped_column(Integer, nullable=False)

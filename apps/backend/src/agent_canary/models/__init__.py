@@ -3,6 +3,7 @@ from agent_canary.models.audit_log import AuditLog
 from agent_canary.models.base import Base
 from agent_canary.models.document_ingestion_job import DocumentIngestionJob
 from agent_canary.models.evaluation_result import EvaluationResult
+from agent_canary.models.llm_call import LLMCall
 from agent_canary.models.policy_rule import PolicyRule
 from agent_canary.models.policy_violation import PolicyViolation
 from agent_canary.models.project import Project
@@ -13,6 +14,7 @@ from agent_canary.models.test_case import TestCase
 from agent_canary.models.test_run import TestRun
 from agent_canary.models.test_run_step import TestRunStep
 from agent_canary.models.test_suite import TestSuite
+from agent_canary.models.tool_call import ToolCall
 from agent_canary.models.tool_definition import ToolDefinition
 
 __all__ = [
@@ -21,6 +23,7 @@ __all__ = [
     "Base",
     "DocumentIngestionJob",
     "EvaluationResult",
+    "LLMCall",
     "PolicyRule",
     "PolicyViolation",
     "Project",
@@ -31,5 +34,6 @@ __all__ = [
     "TestRun",
     "TestRunStep",
     "TestSuite",
+    "ToolCall",
     "ToolDefinition",
 ]

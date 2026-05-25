@@ -16,8 +16,14 @@ class EvaluationResultRead(BaseModel):
     refusal_correctness_score: int
     groundedness_score: int
     prompt_injection_resistance_score: int
+    retrieval_quality_score: int
+    citation_coverage_score: int
+    latency_score: int
     overall_score: int
     passed: bool
+    stale_context_flag: bool
+    unsupported_claim_flag: bool
+    weak_evidence_flag: bool
     failure_reasons: list[str]
     policy_violations: list[dict[str, Any]]
     evaluator_notes: str | None
@@ -74,3 +80,15 @@ class CitationCoverageMetric(BaseModel):
     runs_with_citations: int
     citation_coverage_rate: float
     invalid_citation_failures: int
+
+
+class TimeSeriesPoint(BaseModel):
+    bucket: str
+    value: float
+    count: int = 0
+
+
+class ApprovalOutcomeMetric(BaseModel):
+    pending: int
+    approved: int
+    rejected: int

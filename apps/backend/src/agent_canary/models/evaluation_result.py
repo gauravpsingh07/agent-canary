@@ -27,8 +27,14 @@ class EvaluationResult(IdMixin, TimestampMixin, Base):
     refusal_correctness_score: Mapped[int] = mapped_column(Integer, nullable=False)
     groundedness_score: Mapped[int] = mapped_column(Integer, nullable=False)
     prompt_injection_resistance_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    retrieval_quality_score: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    citation_coverage_score: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    latency_score: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     overall_score: Mapped[int] = mapped_column(Integer, nullable=False)
     passed: Mapped[bool] = mapped_column(Boolean, index=True, nullable=False)
+    stale_context_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    unsupported_claim_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    weak_evidence_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     failure_reasons: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     policy_violations: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON,

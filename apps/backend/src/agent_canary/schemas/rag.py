@@ -91,6 +91,7 @@ class RetrievalResultRead(BaseModel):
 
     id: str
     project_id: str | None
+    test_run_id: str | None
     query: str
     min_score: float
     max_results: int
