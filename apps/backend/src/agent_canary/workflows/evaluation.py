@@ -13,7 +13,15 @@ from sqlalchemy.orm import Session
 from agent_canary.llm import LLMProvider, build_llm_provider
 from agent_canary.llm.exceptions import LLMProviderResponseError
 from agent_canary.llm.parsing import parse_json_object
-from agent_canary.models import EvaluationResult, TestCase, TestRun, TestRunStep, TestSuite
+from agent_canary.models import (
+    EvaluationResult,
+    LLMCall,
+    TestCase,
+    TestRun,
+    TestRunStep,
+    TestSuite,
+    ToolCall,
+)
 from agent_canary.models.base import utc_now
 from agent_canary.schemas import (
     AgentOutput,
@@ -24,12 +32,27 @@ from agent_canary.schemas import (
 from agent_canary.services.approvals import create_approval_request_if_needed
 from agent_canary.services.audit import write_audit_log
 from agent_canary.services.policy_engine import evaluate_policy
-from agent_canary.services.rag import retrieve_chunks
+from agent_canary.services.rag import mark_used_in_answer, retrieve_chunks
 from agent_canary.services.scoring import EvaluationScoringInput, score_evaluation
 from agent_canary.services.tool_registry import validate_tool_arguments
 
-RAG_CATEGORIES = {"weak_retrieval", "stale_context", "hallucination"}
-RAG_TAGS = {"rag", "weak-retrieval", "stale-context", "grounding", "citations"}
+RAG_CATEGORIES = {
+    "weak_retrieval",
+    "stale_context",
+    "hallucination",
+    "retrieval_quality",
+    "citation_failure",
+    "unsupported_claim",
+}
+RAG_TAGS = {
+    "rag",
+    "weak-retrieval",
+    "stale-context",
+    "grounding",
+    "citations",
+    "unsupported-claim",
+    "retrieval-quality",
+}
 
 AGENT_OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -78,6 +101,9 @@ class EvaluationState(TypedDict, total=False):
     should_require_approval: bool
     expected_refusal: bool
     expected_schema_valid: bool
+    requires_retrieval: bool
+    expected_citations: bool
+    min_retrieval_score: float | None
     category: str
     tags: list[str]
     severity: str
@@ -92,8 +118,11 @@ class EvaluationState(TypedDict, total=False):
     tool_validation_errors: list[str]
     policy_result: dict[str, Any] | None
     latency_ms: int | None
+    llm_call_id: str | None
+    tool_call_id: str | None
     evaluation_result_id: str
     evaluation_scores: dict[str, int]
+    evaluation_flags: dict[str, bool]
     approval_request_id: str | None
     requires_human_review: bool
     overall_score: int
@@ -199,6 +228,9 @@ class EvaluationWorkflowContext:
             "should_require_approval": test_case.should_require_approval,
             "expected_refusal": test_case.expected_refusal,
             "expected_schema_valid": test_case.expected_schema_valid,
+            "requires_retrieval": test_case.requires_retrieval,
+            "expected_citations": test_case.expected_citations,
+            "min_retrieval_score": test_case.min_retrieval_score,
             "category": test_case.category,
             "tags": test_case.tags,
             "severity": test_case.severity,
@@ -208,6 +240,18 @@ class EvaluationWorkflowContext:
         if not should_retrieve_evidence(state):
             return {"retrieval_result_id": None, "retrieved_evidence": []}
 
+        write_audit_log(
+            self.db,
+            project_id=state.get("project_id"),
+            entity_type="test_run",
+            entity_id=state["test_run_id"],
+            event_type="RETRIEVAL_STARTED",
+            metadata={
+                "query": state["prompt"],
+                "min_retrieval_score": state.get("min_retrieval_score"),
+            },
+        )
+
         result = retrieve_chunks(
             self.db,
             RetrievalRequest(
@@ -216,6 +260,7 @@ class EvaluationWorkflowContext:
                 max_results=4,
                 min_score=0.0,
             ),
+            test_run_id=state["test_run_id"],
         )
         return {
             "retrieval_result_id": result.id,
@@ -247,13 +292,38 @@ class EvaluationWorkflowContext:
 
     def _call_llm_provider(self, state: EvaluationState) -> EvaluationState:
         started_at = perf_counter()
-        output = self.provider.generate_text(
-            prompt=state["agent_prompt"],
-            system_prompt=state.get("system_prompt"),
-            temperature=0.0,
-            max_tokens=2048,
-        )
-        latency_ms = max(0, round((perf_counter() - started_at) * 1000))
+        error_message: str | None = None
+        response_text: str | None = None
+        latency_ms: int = 0
+        try:
+            response_text = self.provider.generate_text(
+                prompt=state["agent_prompt"],
+                system_prompt=state.get("system_prompt"),
+                temperature=0.0,
+                max_tokens=2048,
+            )
+        except Exception as exc:
+            error_message = str(exc)
+            raise
+        finally:
+            latency_ms = max(0, round((perf_counter() - started_at) * 1000))
+            llm_call = LLMCall(
+                test_run_id=state["test_run_id"],
+                project_id=state.get("project_id"),
+                provider_name=self.provider.provider_name,
+                model_name=self.provider.model_name,
+                system_prompt=state.get("system_prompt"),
+                prompt=state["agent_prompt"],
+                response_text=response_text,
+                temperature=0.0,
+                max_tokens=2048,
+                latency_ms=latency_ms,
+                error_message=error_message,
+                call_metadata={},
+            )
+            self.db.add(llm_call)
+            self.db.flush()
+
         write_audit_log(
             self.db,
             project_id=state.get("project_id"),
@@ -264,6 +334,7 @@ class EvaluationWorkflowContext:
                 "provider_name": self.provider.provider_name,
                 "model_name": self.provider.model_name,
                 "latency_ms": latency_ms,
+                "llm_call_id": llm_call.id,
             },
         )
         write_audit_log(
@@ -272,9 +343,13 @@ class EvaluationWorkflowContext:
             entity_type="test_run",
             entity_id=state["test_run_id"],
             event_type="AGENT_OUTPUT_RECEIVED",
-            metadata={"output_preview": output[:240]},
+            metadata={"output_preview": (response_text or "")[:240]},
         )
-        return {"agent_output": output, "latency_ms": latency_ms}
+        return {
+            "agent_output": response_text or "",
+            "latency_ms": latency_ms,
+            "llm_call_id": llm_call.id,
+        }
 
     def _parse_agent_output(self, state: EvaluationState) -> EvaluationState:
         try:
@@ -329,15 +404,35 @@ class EvaluationWorkflowContext:
             else:
                 errors.extend(validate_tool_arguments(tool, arguments))
 
+        tool_call_row = ToolCall(
+            test_run_id=state["test_run_id"],
+            tool_name=str(tool_name) if tool_name else "",
+            arguments=arguments if isinstance(arguments, dict) else {},
+            validation_errors=errors,
+            schema_valid=not errors,
+            simulated_action_allowed=False,
+            requires_approval=False,
+            blocked=False,
+            risk_level="medium",
+            policy_violations=[],
+            call_metadata={},
+        )
+        self.db.add(tool_call_row)
+        self.db.flush()
+
         write_audit_log(
             self.db,
             project_id=state.get("project_id"),
             entity_type="test_run",
             entity_id=state["test_run_id"],
             event_type="TOOL_CALL_PROPOSED",
-            metadata={"tool_call": proposed_tool_call, "validation_errors": errors},
+            metadata={
+                "tool_call": proposed_tool_call,
+                "validation_errors": errors,
+                "tool_call_id": tool_call_row.id,
+            },
         )
-        return {"tool_validation_errors": errors}
+        return {"tool_validation_errors": errors, "tool_call_id": tool_call_row.id}
 
     def _run_policy(self, state: EvaluationState) -> EvaluationState:
         proposed_tool_call = state.get("proposed_tool_call")
@@ -345,28 +440,49 @@ class EvaluationWorkflowContext:
             return {"policy_result": None}
 
         validated_output = state.get("validated_output")
+        test_case_metadata = {
+            "category": state.get("category"),
+            "tags": state.get("tags", []),
+            "severity": state.get("severity"),
+            "requires_evidence": bool(state.get("requires_retrieval")),
+            "requires_citations": bool(state.get("expected_citations")),
+            "stale_context": (state.get("category") or "").lower() == "stale_context",
+            "min_retrieval_score": state.get("min_retrieval_score"),
+        }
         policy_request = PolicyEvaluateRequest(
             tool_call=ProposedToolCall.model_validate(proposed_tool_call),
             project_id=state.get("project_id"),
             test_run_id=state["test_run_id"],
-            test_case_metadata={
-                "category": state.get("category"),
-                "tags": state.get("tags", []),
-                "severity": state.get("severity"),
-            },
+            test_case_metadata=test_case_metadata,
             agent_output=validated_output,
+            retrieved_evidence=list(state.get("retrieved_evidence", [])),
             risk_level=validated_output.get("risk_level") if validated_output else None,
             persist_violations=True,
         )
         evaluation = evaluate_policy(self.db, policy_request)
-        policy_result = {
+        violations_payload: list[dict[str, Any]] = [
+            violation.model_dump() for violation in evaluation.violations
+        ]
+        policy_result: dict[str, Any] = {
             "allowed": evaluation.allowed,
             "blocked": evaluation.blocked,
             "requires_approval": evaluation.requires_approval,
             "risk_level": evaluation.risk_level,
-            "violations": [violation.model_dump() for violation in evaluation.violations],
+            "violations": violations_payload,
             "explanation": evaluation.explanation,
         }
+
+        tool_call_id = state.get("tool_call_id")
+        if tool_call_id is not None:
+            tool_call_row = self.db.get(ToolCall, tool_call_id)
+            if tool_call_row is not None:
+                tool_call_row.requires_approval = evaluation.requires_approval
+                tool_call_row.blocked = evaluation.blocked
+                tool_call_row.simulated_action_allowed = evaluation.allowed
+                tool_call_row.risk_level = evaluation.risk_level
+                tool_call_row.policy_violations = violations_payload
+                self.db.flush()
+
         write_audit_log(
             self.db,
             project_id=state.get("project_id"),
@@ -387,6 +503,9 @@ class EvaluationWorkflowContext:
                 should_require_approval=state.get("should_require_approval", False),
                 expected_refusal=state.get("expected_refusal", False),
                 expected_tool_name=state.get("expected_tool_name"),
+                requires_retrieval=state.get("requires_retrieval", False),
+                expected_citations=state.get("expected_citations", False),
+                min_retrieval_score=state.get("min_retrieval_score"),
                 category=state.get("category"),
                 tags=list(state.get("tags", [])),
                 severity=state.get("severity"),
@@ -395,6 +514,7 @@ class EvaluationWorkflowContext:
                 policy_result=state.get("policy_result"),
                 retrieved_evidence=list(state.get("retrieved_evidence", [])),
                 retrieval_result_id=state.get("retrieval_result_id"),
+                latency_ms=state.get("latency_ms"),
             )
         )
         result = EvaluationResult(
@@ -406,8 +526,14 @@ class EvaluationWorkflowContext:
             refusal_correctness_score=score.refusal_correctness_score,
             groundedness_score=score.groundedness_score,
             prompt_injection_resistance_score=score.prompt_injection_resistance_score,
+            retrieval_quality_score=score.retrieval_quality_score,
+            citation_coverage_score=score.citation_coverage_score,
+            latency_score=score.latency_score,
             overall_score=score.overall_score,
             passed=score.passed,
+            stale_context_flag=score.stale_context_flag,
+            unsupported_claim_flag=score.unsupported_claim_flag,
+            weak_evidence_flag=score.weak_evidence_flag,
             failure_reasons=score.failure_reasons,
             policy_violations=score.policy_violations,
             evaluator_notes=score.evaluator_notes,
@@ -417,6 +543,36 @@ class EvaluationWorkflowContext:
         )
         self.db.add(result)
         self.db.flush()
+
+        # Mark retrieved chunks that the agent actually cited.
+        retrieval_result_id = state.get("retrieval_result_id")
+        if retrieval_result_id is not None:
+            validated_output = state.get("validated_output") or {}
+            citations = validated_output.get("citations") if isinstance(
+                validated_output, dict
+            ) else None
+            cited_chunk_ids: set[str] = set()
+            if isinstance(citations, list):
+                for citation in citations:
+                    if isinstance(citation, dict) and citation.get("chunk_id"):
+                        cited_chunk_ids.add(str(citation["chunk_id"]))
+            mark_used_in_answer(self.db, retrieval_result_id, cited_chunk_ids)
+            write_audit_log(
+                self.db,
+                project_id=state.get("project_id"),
+                entity_type="test_run",
+                entity_id=state["test_run_id"],
+                event_type="RAG_EVALUATION_COMPLETED",
+                metadata={
+                    "retrieval_result_id": retrieval_result_id,
+                    "groundedness_score": score.groundedness_score,
+                    "retrieval_quality_score": score.retrieval_quality_score,
+                    "citation_coverage_score": score.citation_coverage_score,
+                    "cited_chunk_ids": sorted(cited_chunk_ids),
+                    "flags": score.flags(),
+                },
+            )
+
         write_audit_log(
             self.db,
             project_id=state.get("project_id"),
@@ -427,12 +583,14 @@ class EvaluationWorkflowContext:
                 "evaluation_result_id": result.id,
                 "passed": score.passed,
                 "scores": score.component_scores(),
+                "flags": score.flags(),
                 "failure_reasons": score.failure_reasons,
             },
         )
         return {
             "evaluation_result_id": result.id,
             "evaluation_scores": score.component_scores(),
+            "evaluation_flags": score.flags(),
             "overall_score": score.overall_score,
             "passed": score.passed,
             "failure_reasons": score.failure_reasons,
@@ -578,6 +736,9 @@ def run_test_case_workflow(
         "policy_result": final_state.get("policy_result"),
         "evaluation_result_id": final_state.get("evaluation_result_id"),
         "evaluation_scores": final_state.get("evaluation_scores", {}),
+        "evaluation_flags": final_state.get("evaluation_flags", {}),
+        "llm_call_id": final_state.get("llm_call_id"),
+        "tool_call_id": final_state.get("tool_call_id"),
         "requires_human_review": final_state.get("requires_human_review", False),
         "approval_request_id": final_state.get("approval_request_id"),
         "latency_ms": final_state.get("latency_ms"),
@@ -589,9 +750,14 @@ def run_test_case_workflow(
 
 
 def should_retrieve_evidence(state: EvaluationState) -> bool:
-    category = state.get("category", "").lower()
+    category = (state.get("category") or "").lower()
     tags = {tag.lower() for tag in state.get("tags", [])}
-    return category in RAG_CATEGORIES or bool(tags.intersection(RAG_TAGS))
+    return (
+        bool(state.get("requires_retrieval"))
+        or bool(state.get("expected_citations"))
+        or category in RAG_CATEGORIES
+        or bool(tags.intersection(RAG_TAGS))
+    )
 
 
 def safe_json(value: Any) -> dict[str, Any]:
