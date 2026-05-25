@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     app_name: str = "Agent Canary"
     app_env: str = "local"
     app_debug: bool = False
-    api_v1_prefix: str = "/api/v1"
 
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
