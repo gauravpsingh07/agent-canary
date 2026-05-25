@@ -6,21 +6,25 @@ The project is built as a portfolio-grade AI infrastructure app rather than a ge
 
 ## Status
 
-Implemented through Phase 12 locally:
+Implemented through Phase 13 locally:
 
-- FastAPI backend with SQLAlchemy, Alembic, Pydantic, Ruff, mypy, and pytest
+- FastAPI backend with SQLAlchemy, Alembic, Pydantic, Ruff, mypy, and pytest (57 tests)
 - Next.js dashboard with TypeScript, Tailwind CSS, shadcn-style components, lucide icons, and Recharts
-- LangGraph evaluation workflow with persisted test-run steps
+- Vitest frontend test harness with 11 component + util tests, wired into CI
+- LangGraph evaluation workflow (11 steps) with persisted `test_run_steps`, `llm_calls`, and `tool_calls` tables
 - LLM provider abstraction for mock, Gemini, Groq, and optional OpenAI
 - Mock provider for deterministic tests and demos
 - Simulated tool registry and JSON Schema tool-call validation
-- Rule-based policy engine for unsafe autonomous actions
-- Evaluation scoring for schema validity, tool safety, policy compliance, approval correctness, refusal correctness, groundedness, prompt injection resistance, and overall score
+- Rule-based policy engine with 13 default rules covering prompt injection, sensitive content, approvals, schema validity, retrieval thresholds, citation integrity, unsupported claims, stale context, and irrelevant context
+- Evaluation scoring across 10 dimensions: schema validity, tool safety, policy compliance, approval correctness, refusal correctness, groundedness, prompt injection resistance, retrieval quality, citation coverage, latency — plus `stale_context_flag`, `unsupported_claim_flag`, `weak_evidence_flag`
 - Human approval queue with approve/reject APIs and audit events
-- RAG document ingestion, chunking, embeddings, retrieval results, and pgvector-ready persistence
-- RAG failure evaluation for weak retrieval, stale context, unsupported claims, and citations
-- Metrics APIs and dashboard charts
-- GitHub Actions CI for backend and frontend validation
+- RAG document ingestion (with re-ingest), chunking, embeddings, retrieval results linked to test runs, and pgvector cosine-distance search on Postgres (Python fallback on SQLite)
+- Six seeded adversarial demo suites (Prompt Injection, Unsafe Tool Calls, Structured Output, RAG Failure, Approval, Retrieval Quality) — 25 cases total
+- Optional `?async_mode=true` background-task execution for suite runs and document ingestion
+- Metrics APIs and dashboard charts: pass/fail trend over time, average score over time, approval outcomes, RAG failure categories, retrieval quality over time, citation coverage over time, policy violations, provider latency
+- Dedicated dashboard pages for landing, overview, projects, test suites (master/detail), test-case editor, test runs, failure reports, policy rules, tools, approvals, audit logs, RAG documents, ingestion jobs, retrieval, and metrics
+- GitHub Actions CI runs ruff, mypy, pytest, vitest, typecheck, and build
+- `docker-compose.yml` with pgvector-enabled Postgres + backend for one-command local setup
 - Deployment documentation for Vercel, Render, and Supabase
 
 ## Why It Matters
@@ -233,13 +237,24 @@ CI runs these checks on pushes and pull requests to `main`.
 ## Documentation
 
 - `docs/project-spec.md`
-- `docs/deployment.md`
 - `docs/architecture.md`
+- `docs/ai-safety-model.md` — threat model, defense layers, risk lattice
+- `docs/evaluation-design.md` — 10 component scores, 3 RAG flags, extension points
+- `docs/api.md` — every REST endpoint with request/response shapes
 - `docs/data-pipeline.md`
 - `docs/rag-pipeline.md`
-- `docs/screenshots.md`
+- `docs/deployment.md`
 - `docs/production-env.md`
+- `docs/screenshots.md`
 - `docs/portfolio-notes.md`
+
+## One-Command Local Setup
+
+```powershell
+docker compose up --build
+```
+
+Brings up Postgres with pgvector + the FastAPI backend on `http://127.0.0.1:8000`. Then run the frontend separately with `cd apps/frontend && npm run dev`.
 
 ## Deployment Targets
 
@@ -256,13 +271,11 @@ Screenshot placeholders are tracked in `docs/screenshots.md`. Add final images a
 
 ## Future Improvements
 
-- Async background queue with Upstash Redis and RQ
+- Replace `FastAPI BackgroundTasks` with Upstash Redis + RQ for durable job execution
 - More provider adapters and model comparison reports
-- Saved failure reports and replay workflows
-- Organization/user auth
+- Organization/user authentication and multi-tenant projects
 - pgvector similarity search tuned against larger corpora
-- Playwright end-to-end dashboard tests
-- Exportable evaluation reports
+- Playwright end-to-end dashboard tests on top of the existing Vitest harness
 
 ## Resume Bullets This Project Supports
 
