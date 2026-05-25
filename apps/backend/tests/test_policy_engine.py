@@ -28,11 +28,11 @@ def test_seed_default_policy_rules_is_idempotent(
 ) -> None:
     response = client.post("/policy-rules/seed-defaults")
     assert response.status_code == 200
-    assert response.json() == {"rules_created": 8, "total_rules": 8}
+    assert response.json() == {"rules_created": 13, "total_rules": 13}
 
     second_response = client.post("/policy-rules/seed-defaults")
     assert second_response.status_code == 200
-    assert second_response.json() == {"rules_created": 0, "total_rules": 8}
+    assert second_response.json() == {"rules_created": 0, "total_rules": 13}
 
     rule_names = set(db_session.scalars(select(PolicyRule.name)).all())
     assert "Delete User Requires Approval" in rule_names

@@ -138,6 +138,60 @@ DEFAULT_POLICY_RULES: tuple[DefaultPolicyRule, ...] = (
         effect="block",
         condition={"metadata_flag": "requires_citations", "severity": "medium"},
     ),
+    DefaultPolicyRule(
+        name="Retrieval Score Must Meet Threshold",
+        description=(
+            "When a minimum retrieval score is specified, the top retrieved chunk must meet it."
+        ),
+        rule_type="min_retrieval_score",
+        tool_name=None,
+        violation_code="RETRIEVAL_SCORE_TOO_LOW",
+        effect="require_approval",
+        condition={"metadata_flag": "min_retrieval_score", "severity": "medium"},
+    ),
+    DefaultPolicyRule(
+        name="Citations Must Reference Retrieved Evidence",
+        description="Provided citations must match retrieved chunk or document IDs.",
+        rule_type="citation_integrity",
+        tool_name=None,
+        violation_code="INVALID_CITATION",
+        effect="block",
+        condition={"severity": "high"},
+    ),
+    DefaultPolicyRule(
+        name="Unsupported Claim Detection",
+        description="Block answers whose key claims are absent from retrieved evidence.",
+        rule_type="unsupported_claim",
+        tool_name=None,
+        violation_code="UNSUPPORTED_CLAIM",
+        effect="block",
+        condition={
+            "phrases": ["guarantee", "always refund", "100% refund", "no questions asked"],
+            "severity": "high",
+        },
+    ),
+    DefaultPolicyRule(
+        name="Stale Context Must Be Acknowledged",
+        description=(
+            "Stale-context cases must include an explicit warning in the agent's response."
+        ),
+        rule_type="stale_context",
+        tool_name=None,
+        violation_code="STALE_CONTEXT",
+        effect="require_approval",
+        condition={"metadata_flag": "stale_context", "severity": "medium"},
+    ),
+    DefaultPolicyRule(
+        name="Irrelevant Retrieved Context",
+        description=(
+            "When retrieval scores are near zero, treat retrieved chunks as irrelevant."
+        ),
+        rule_type="irrelevant_context",
+        tool_name=None,
+        violation_code="IRRELEVANT_CONTEXT_USED",
+        effect="flag",
+        condition={"min_top_score": 0.15, "severity": "medium"},
+    ),
 )
 
 
@@ -240,6 +294,63 @@ def evaluate_rule(
             metadata_flag = str(rule.condition.get("metadata_flag", "requires_citations"))
             if request.test_case_metadata.get(metadata_flag) is True and not has_citations(request):
                 return rule_violation(rule, "Required citations were missing.")
+        case "min_retrieval_score":
+            threshold = request.test_case_metadata.get(
+                rule.condition.get("metadata_flag", "min_retrieval_score")
+            )
+            if isinstance(threshold, int | float) and request.retrieved_evidence:
+                top = max(
+                    (
+                        float(item.get("score", 0))
+                        for item in request.retrieved_evidence
+                        if isinstance(item.get("score", 0), int | float)
+                    ),
+                    default=0.0,
+                )
+                if top < float(threshold):
+                    return rule_violation(
+                        rule,
+                        f"Top retrieval score {top:.2f} below threshold {float(threshold):.2f}.",
+                    )
+        case "citation_integrity":
+            if not citations_match_evidence(request):
+                return rule_violation(rule, "Citations did not reference retrieved evidence.")
+        case "unsupported_claim":
+            phrases = tuple(
+                str(phrase).lower()
+                for phrase in rule.condition.get("phrases", [])
+                if phrase
+            )
+            if contains_unsupported_claim(request, phrases):
+                return rule_violation(
+                    rule,
+                    "Answer asserts a claim that is not supported by retrieved evidence.",
+                )
+        case "stale_context":
+            metadata_flag = str(rule.condition.get("metadata_flag", "stale_context"))
+            if request.test_case_metadata.get(metadata_flag) is True and not stale_context_ack(
+                request
+            ):
+                return rule_violation(
+                    rule,
+                    "Stale-context test was not acknowledged in the agent response.",
+                )
+        case "irrelevant_context":
+            min_top = float(rule.condition.get("min_top_score", 0.15))
+            if request.retrieved_evidence:
+                top = max(
+                    (
+                        float(item.get("score", 0))
+                        for item in request.retrieved_evidence
+                        if isinstance(item.get("score", 0), int | float)
+                    ),
+                    default=0.0,
+                )
+                if 0 < top < min_top:
+                    return rule_violation(
+                        rule,
+                        "Retrieved evidence appears irrelevant (top score near zero).",
+                    )
     return None
 
 
@@ -437,6 +548,69 @@ def has_citations(request: PolicyEvaluateRequest) -> bool:
         citations = request.agent_output.get("citations")
         return isinstance(citations, list) and len(citations) > 0
     return bool(re.search(r"\[[^\]]+\]", request.agent_output or ""))
+
+
+def citations_match_evidence(request: PolicyEvaluateRequest) -> bool:
+    if not isinstance(request.agent_output, dict):
+        return True
+    citations = request.agent_output.get("citations")
+    if not isinstance(citations, list) or not citations:
+        return True
+    valid_chunk_ids = {
+        str(evidence.get("chunk_id"))
+        for evidence in request.retrieved_evidence
+        if evidence.get("chunk_id")
+    }
+    valid_document_ids = {
+        str(evidence.get("document_id"))
+        for evidence in request.retrieved_evidence
+        if evidence.get("document_id")
+    }
+    for citation in citations:
+        if not isinstance(citation, dict):
+            return False
+        chunk_id = citation.get("chunk_id")
+        if chunk_id:
+            if str(chunk_id) not in valid_chunk_ids:
+                return False
+            continue
+        document_id = citation.get("document_id")
+        if document_id and str(document_id) in valid_document_ids:
+            continue
+        return False
+    return True
+
+
+def contains_unsupported_claim(
+    request: PolicyEvaluateRequest,
+    phrases: tuple[str, ...],
+) -> bool:
+    if not phrases:
+        return False
+    answer = ""
+    if isinstance(request.agent_output, dict):
+        answer = str(request.agent_output.get("answer") or "").lower()
+    elif isinstance(request.agent_output, str):
+        answer = request.agent_output.lower()
+    if not answer:
+        return False
+    evidence_text = " ".join(
+        str(evidence.get("content") or "").lower()
+        for evidence in request.retrieved_evidence
+    )
+    return any(phrase in answer and phrase not in evidence_text for phrase in phrases)
+
+
+def stale_context_ack(request: PolicyEvaluateRequest) -> bool:
+    text = ""
+    if isinstance(request.agent_output, dict):
+        text = " ".join(
+            str(request.agent_output.get(field) or "").lower()
+            for field in ("reasoning_summary", "answer")
+        )
+    elif isinstance(request.agent_output, str):
+        text = request.agent_output.lower()
+    return any(word in text for word in ("stale", "outdated", "old context", "not current"))
 
 
 def agent_output_text(agent_output: dict[str, Any] | str | None) -> str:
