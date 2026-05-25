@@ -1,10 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from agent_canary.db.session import get_db
+from agent_canary.db.session import SessionLocal, get_db
 from agent_canary.models import (
     DocumentIngestionJob,
     Project,
@@ -53,14 +53,82 @@ def get_retrieval_result_or_404(db: Session, result_id: str) -> RetrievalResult:
     return result
 
 
+def _ingest_document_in_background(payload: RagDocumentCreate) -> None:
+    session = SessionLocal()
+    try:
+        ingest_document(session, payload)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 @router.post(
     "/rag/documents",
     response_model=DocumentIngestionResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_rag_document(payload: RagDocumentCreate, db: DbSession) -> DocumentIngestionResponse:
+def create_rag_document(
+    payload: RagDocumentCreate,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    async_mode: bool = Query(default=False),
+) -> DocumentIngestionResponse:
     ensure_project_exists(db, payload.project_id)
+    if async_mode:
+        # Create a placeholder document row + queued ingestion job; do the work off-thread.
+        document = RagDocument(
+            project_id=payload.project_id,
+            title=payload.title,
+            source_type=payload.source_type,
+            source_uri=payload.source_uri,
+            content_hash="pending",
+            status="pending",
+            document_metadata=payload.metadata,
+        )
+        db.add(document)
+        db.flush()
+        job = DocumentIngestionJob(
+            project_id=payload.project_id,
+            document_id=document.id,
+            status="queued",
+            job_metadata={"mode": "background"},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(document)
+        db.refresh(job)
+        background_tasks.add_task(_ingest_document_in_background, payload)
+        return DocumentIngestionResponse(
+            document=RagDocumentRead.model_validate(document),
+            ingestion_job=DocumentIngestionJobRead.model_validate(job),
+            chunks_created=0,
+        )
+
     outcome = ingest_document(db, payload)
+    db.commit()
+    db.refresh(outcome.document)
+    db.refresh(outcome.ingestion_job)
+    return DocumentIngestionResponse(
+        document=RagDocumentRead.model_validate(outcome.document),
+        ingestion_job=DocumentIngestionJobRead.model_validate(outcome.ingestion_job),
+        chunks_created=outcome.chunks_created,
+    )
+
+
+@router.post(
+    "/rag/documents/{document_id}/ingest",
+    response_model=DocumentIngestionResponse,
+)
+def reingest_rag_document(
+    document_id: str,
+    payload: RagDocumentCreate,
+    db: DbSession,
+) -> DocumentIngestionResponse:
+    document = get_document_or_404(db, document_id)
+    outcome = ingest_document(db, payload, document=document)
     db.commit()
     db.refresh(outcome.document)
     db.refresh(outcome.ingestion_job)
@@ -129,6 +197,21 @@ def retrieve_rag_chunks(payload: RetrievalRequest, db: DbSession) -> RetrievalRe
     db.commit()
     db.refresh(result)
     return result
+
+
+@router.get("/rag/retrieval-results", response_model=list[RetrievalResultRead])
+def list_retrieval_results(
+    db: DbSession,
+    limit: int = Query(default=100, ge=1, le=500),
+    project_id: str | None = None,
+    test_run_id: str | None = None,
+) -> list[RetrievalResult]:
+    statement = select(RetrievalResult).order_by(RetrievalResult.created_at.desc()).limit(limit)
+    if project_id is not None:
+        statement = statement.where(RetrievalResult.project_id == project_id)
+    if test_run_id is not None:
+        statement = statement.where(RetrievalResult.test_run_id == test_run_id)
+    return list(db.scalars(statement).all())
 
 
 @router.get("/rag/retrieval-results/{result_id}", response_model=RetrievalResultRead)

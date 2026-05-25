@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -108,6 +108,22 @@ def update_policy_rule(
     db.commit()
     db.refresh(rule)
     return rule
+
+
+@router.delete("/policy-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_policy_rule(rule_id: str, db: DbSession) -> Response:
+    rule = get_policy_rule_or_404(db, rule_id)
+    write_audit_log(
+        db,
+        project_id=None,
+        entity_type="policy_rule",
+        entity_id=rule.id,
+        event_type="POLICY_RULE_DELETED",
+        metadata={"rule_name": rule.name},
+    )
+    db.delete(rule)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/policy/evaluate", response_model=PolicyEvaluationResponse)
