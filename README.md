@@ -1,181 +1,120 @@
 # Agent Canary
 
-Agent Canary is a live AI agent evaluation and safety testing platform for stress-testing agents before they are trusted in production. It checks prompt injection resistance, unsafe tool calls, invalid structured outputs, weak retrieval, stale context, hallucinated claims, missing approval flows, policy bypass attempts, and RAG citation behavior.
+**A safety testing platform for AI agents.** Before an agent is trusted to call real tools or answer real customers, Agent Canary runs it through repeatable adversarial test suites and scores how it behaves. It catches prompt injection, unsafe tool calls, malformed JSON, weak retrieval, hallucination, missing approval flows, and policy bypass — and surfaces every decision in an operational dashboard with full audit history.
 
-The project is built as a portfolio-grade AI infrastructure app rather than a generic chatbot. It demonstrates backend AI engineering, stateful agent workflows, structured validation, simulated tool execution, human review, audit logging, RAG failure testing, and an operational dashboard.
+Agent Canary does not execute real tools. Agents produce structured proposed actions; the platform validates the JSON, checks the tool schema, applies a policy engine, scores ten safety dimensions, and creates human-review requests when needed.
 
-## Status
+## Why It Exists
 
-Implemented through Phase 13 locally:
+Production AI agents fail in ways traditional CRUD apps do not. They follow malicious instructions, invent facts, propose risky tool calls, skip approval gates, emit malformed JSON, or answer confidently from weak retrieval. These failures rarely show up in unit tests and they are easy to miss in casual chat sessions. Agent Canary makes them visible and measurable — repeatable test cases, deterministic scoring, persisted evidence, dashboards.
 
-- FastAPI backend with SQLAlchemy, Alembic, Pydantic, Ruff, mypy, and pytest (57 tests)
-- Next.js dashboard with TypeScript, Tailwind CSS, shadcn-style components, lucide icons, and Recharts
-- Vitest frontend test harness with 11 component + util tests, wired into CI
-- LangGraph evaluation workflow (11 steps) with persisted `test_run_steps`, `llm_calls`, and `tool_calls` tables
-- LLM provider abstraction for mock, Gemini, Groq, and optional OpenAI
-- Mock provider for deterministic tests and demos
-- Simulated tool registry and JSON Schema tool-call validation
-- Rule-based policy engine with 13 default rules covering prompt injection, sensitive content, approvals, schema validity, retrieval thresholds, citation integrity, unsupported claims, stale context, and irrelevant context
-- Evaluation scoring across 10 dimensions: schema validity, tool safety, policy compliance, approval correctness, refusal correctness, groundedness, prompt injection resistance, retrieval quality, citation coverage, latency — plus `stale_context_flag`, `unsupported_claim_flag`, `weak_evidence_flag`
-- Human approval queue with approve/reject APIs and audit events
-- RAG document ingestion (with re-ingest), chunking, embeddings, retrieval results linked to test runs, and pgvector cosine-distance search on Postgres (Python fallback on SQLite)
-- Six seeded adversarial demo suites (Prompt Injection, Unsafe Tool Calls, Structured Output, RAG Failure, Approval, Retrieval Quality) — 25 cases total
-- Optional `?async_mode=true` background-task execution for suite runs and document ingestion
-- Metrics APIs and dashboard charts: pass/fail trend over time, average score over time, approval outcomes, RAG failure categories, retrieval quality over time, citation coverage over time, policy violations, provider latency
-- Dedicated dashboard pages for landing, overview, projects, test suites (master/detail), test-case editor, test runs, failure reports, policy rules, tools, approvals, audit logs, RAG documents, ingestion jobs, retrieval, and metrics
-- GitHub Actions CI runs ruff, mypy, pytest, vitest, typecheck, and build
-- `docker-compose.yml` with pgvector-enabled Postgres + backend for one-command local setup
-- Deployment documentation for Vercel, Render, and Supabase
+## What It Does
 
-## Why It Matters
-
-Production AI agents fail in ways traditional CRUD apps do not: they may follow malicious instructions, invent facts, call risky tools, skip approval gates, emit malformed JSON, or answer from weak retrieval. Agent Canary makes those failure modes visible and measurable through repeatable test suites, policy checks, scoring, audit logs, and dashboards.
-
-## Core Concepts Demonstrated
-
-- AI agent evaluation
-- LangGraph workflow orchestration
-- LLM provider adapters
-- Structured output validation
-- Simulated tool calling
-- Policy enforcement for autonomous actions
-- Human-in-the-loop review
-- RAG ingestion and retrieval failure testing
-- Audit logging and metrics
-- Full-stack AI product architecture
-- CI, Docker, and deployment planning
+- **Runs adversarial test suites** against any agent through a pluggable LLM provider layer.
+- **Validates structured outputs** against a Pydantic + JSON Schema contract.
+- **Validates proposed tool calls** against per-tool argument schemas in a registry of simulated tools.
+- **Applies a policy engine** with rules for prompt injection, sensitive content, approval thresholds, citation integrity, weak retrieval, stale context, and unsupported claims.
+- **Scores ten safety dimensions** per run: schema validity, tool safety, policy compliance, approval correctness, refusal correctness, groundedness, prompt injection resistance, retrieval quality, citation coverage, and latency.
+- **Routes high-risk actions** to a human approval queue with approve/reject APIs and reviewer notes.
+- **Tests RAG behaviour** with weak retrieval, stale context, unsupported claims, and missing-citation cases — backed by document ingestion, chunking, embeddings, and pgvector cosine retrieval.
+- **Persists everything**: test runs, every workflow step, every LLM call, every proposed tool call, every retrieval, every policy violation, every audit event.
+- **Visualizes safety posture**: pass/fail trend, score over time, failure categories, policy violations, approval outcomes, retrieval quality, citation coverage, provider latency.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    User[User] --> Frontend[Next.js Dashboard]
+    User[Operator] --> Frontend[Next.js Dashboard]
     Frontend --> API[FastAPI API]
-    API --> DB[(Supabase Postgres)]
-    API --> Audit[Audit Logs]
-    API --> Tools[Simulated Tool Registry]
-    API --> Policy[Policy Engine]
+    API --> DB[(Postgres + pgvector)]
     API --> Eval[LangGraph Evaluation Workflow]
-    Eval --> LLM[Mock, Gemini, Groq, OpenAI]
-    Eval --> RAG[RAG Retrieval]
-    RAG --> Vector[pgvector-ready Chunks]
-    Eval --> Review[Human Approval Queue]
+    Eval --> LLM[Mock / Gemini / Groq / OpenAI]
+    Eval --> RAG[Retrieval Service]
+    RAG --> DB
+    Eval --> Policy[Policy Engine]
+    Eval --> Review[Approval Queue]
+    Eval --> Audit[Audit Log]
 ```
 
-## Monorepo Layout
-
-```text
-apps/
-  backend/       FastAPI, SQLAlchemy, Alembic, LangGraph, pytest
-  frontend/      Next.js, TypeScript, Tailwind, Recharts
-docs/            project spec and deployment/architecture docs
-.github/         CI workflows
-```
+A single test run flows through 11 LangGraph nodes: load case → retrieve evidence → build prompt → call LLM → parse → validate schema → validate tool call → run policy → score → create review (if risky) → persist + audit.
 
 ## Tech Stack
 
-Frontend:
-
-- Next.js
-- TypeScript
-- Tailwind CSS
-- shadcn-style local UI components
-- lucide-react
-- Recharts
-
-Backend:
-
-- Python
-- FastAPI
-- Pydantic
-- SQLAlchemy
-- Alembic
-- LangGraph
-- pytest
-- Ruff
-- mypy
-
-Database and AI:
-
-- Supabase Postgres
-- pgvector-ready migrations
-- Gemini and Groq adapters
-- optional OpenAI adapter
-- deterministic mock LLM and embedding providers
+**Frontend:** Next.js, TypeScript, Tailwind CSS, Recharts, lucide-react, Vitest.
+**Backend:** FastAPI, Pydantic, SQLAlchemy 2, Alembic, LangGraph, jsonschema, httpx.
+**Database:** Postgres with pgvector for vector similarity.
+**AI providers:** Pluggable interface with adapters for Gemini, Groq, optional OpenAI, plus a deterministic mock for tests and free demos.
+**Tooling:** Ruff, mypy (strict), pytest, GitHub Actions, Docker, docker-compose.
 
 ## Local Setup
 
-Create an environment file:
+The fastest path uses Docker:
 
 ```powershell
-Copy-Item .env.example .env
+docker compose up --build
 ```
 
-Install backend dependencies:
-
-```powershell
-cd apps/backend
-python -m pip install -e ".[dev]"
-```
-
-Install frontend dependencies:
+This starts a pgvector-enabled Postgres and the FastAPI backend on `http://127.0.0.1:8000`. Run the frontend separately:
 
 ```powershell
 cd apps/frontend
 npm ci
-```
-
-Run database migrations from `apps/backend`:
-
-```powershell
-alembic upgrade head
-```
-
-Run the backend:
-
-```powershell
-cd apps/backend
-uvicorn agent_canary.main:app --reload
-```
-
-Run the frontend:
-
-```powershell
-cd apps/frontend
 npm run dev
 ```
 
-Local URLs:
+The dashboard is then on `http://127.0.0.1:3000`.
 
-- Frontend: `http://127.0.0.1:3000`
-- Backend health: `http://127.0.0.1:8000/health`
-- API docs: `http://127.0.0.1:8000/docs`
+To run the backend natively instead of via Docker:
 
-## Environment Variables
+```powershell
+Copy-Item .env.example .env
+cd apps/backend
+python -m pip install -e ".[dev]"
+alembic upgrade head
+uvicorn agent_canary.main:app --reload
+```
 
-The full local reference is in `.env.example`.
+The default `.env.example` uses `LLM_PROVIDER=mock` and `EMBEDDING_PROVIDER=mock` so no paid API keys are required for a complete local demo. Switch to Gemini, Groq, or OpenAI by setting the corresponding key and model name.
 
-Important backend variables:
+## Trying It Out
 
-- `DATABASE_URL`
-- `APP_ENV`
-- `APP_DEBUG`
-- `JWT_SECRET`
-- `CORS_ORIGINS`
-- `LLM_PROVIDER`
-- `GEMINI_API_KEY`
-- `GROQ_API_KEY`
-- `OPENAI_API_KEY`
-- `EMBEDDING_PROVIDER`
-- `REDIS_URL`
+Once the backend is running, seed a demo project:
 
-Important frontend variable:
+```bash
+curl -X POST http://127.0.0.1:8000/projects \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Demo"}'
+# returns: {"id": "<project-id>", ...}
 
-- `NEXT_PUBLIC_API_BASE_URL`
+curl -X POST http://127.0.0.1:8000/tools/seed-defaults
+curl -X POST http://127.0.0.1:8000/policy-rules/seed-defaults
+curl -X POST http://127.0.0.1:8000/projects/<project-id>/seed-demo-data
+curl -X POST http://127.0.0.1:8000/projects/<project-id>/seed-rag-demo-data
+```
 
-Use `LLM_PROVIDER=mock` and `EMBEDDING_PROVIDER=mock` for deterministic local demos without paid API calls.
+That gives you nine simulated tools, thirteen policy rules, six adversarial test suites with twenty-five cases, and the RAG document corpus. Open the dashboard, pick a suite, click **Run**, and watch the metrics fill in.
 
-## Validation
+Interactive API docs live at `http://127.0.0.1:8000/docs`.
+
+## Project Layout
+
+```text
+apps/
+  backend/   FastAPI service, LangGraph workflow, Alembic migrations, pytest
+  frontend/  Next.js dashboard, Vitest tests
+docs/        Architecture, API reference, safety model, evaluation design
+```
+
+## Documentation
+
+- [`docs/architecture.md`](docs/architecture.md) — system diagram, service boundaries, deployment shape
+- [`docs/ai-safety-model.md`](docs/ai-safety-model.md) — threat model, defense layers, risk lattice
+- [`docs/evaluation-design.md`](docs/evaluation-design.md) — the ten component scores and how to add new ones
+- [`docs/rag-pipeline.md`](docs/rag-pipeline.md) — ingestion, chunking, embeddings, retrieval
+- [`docs/api.md`](docs/api.md) — every REST endpoint with request/response shapes
+- [`docs/deployment.md`](docs/deployment.md) — Vercel + Render + Supabase guide
+
+## Running The Tests
 
 Backend:
 
@@ -183,7 +122,7 @@ Backend:
 cd apps/backend
 python -m ruff check src tests
 python -m mypy src
-python -m pytest -p no:cacheprovider --disable-warnings
+python -m pytest
 ```
 
 Frontend:
@@ -191,96 +130,12 @@ Frontend:
 ```powershell
 cd apps/frontend
 npm run typecheck
+npm test
 npm run build
 ```
 
-CI runs these checks on pushes and pull requests to `main`.
+GitHub Actions runs the full matrix on every push and pull request to `main`.
 
-## Seeded Demo Flow
+## License
 
-1. Create a project in the dashboard or through `POST /projects`.
-2. Seed adversarial evaluation cases with `POST /projects/{project_id}/seed-demo-data`.
-3. Seed RAG documents and RAG failure cases with `POST /projects/{project_id}/seed-rag-demo-data`.
-4. Seed simulated tools with `POST /tools/seed-defaults`.
-5. Seed policy rules with `POST /policy-rules/seed-defaults`.
-6. Run a test suite from the dashboard.
-7. Review results, workflow steps, policy violations, metrics, audit logs, and approval requests.
-
-## Core API Areas
-
-- Health: `/health`
-- Projects: `/projects`
-- Test suites: `/projects/{project_id}/test-suites`, `/test-suites/{suite_id}`
-- Test cases: `/test-suites/{suite_id}/test-cases`, `/test-cases/{test_case_id}`
-- Test runs: `/test-cases/{test_case_id}/run`, `/test-suites/{suite_id}/run`, `/test-runs`
-- Tools: `/tools`, `/tools/seed-defaults`, `/tools/validate-call`
-- Policy: `/policy-rules`, `/policy-rules/seed-defaults`, `/policy/evaluate`
-- Evaluation: `/evaluation-results`, `/metrics/summary`, `/metrics/failures-by-category`
-- Approvals: `/approval-requests`
-- Audit: `/audit-logs`
-- RAG: `/rag/documents`, `/rag/retrieve`, `/rag/retrieval-results/{result_id}`
-
-## Dashboard Pages
-
-- Overview
-- Projects
-- Test suites
-- Test runs and run detail
-- Policy rules
-- Tool registry
-- Approval queue
-- Audit logs
-- RAG documents
-- Retrieval results
-- Metrics
-
-## Documentation
-
-- `docs/project-spec.md`
-- `docs/architecture.md`
-- `docs/ai-safety-model.md` — threat model, defense layers, risk lattice
-- `docs/evaluation-design.md` — 10 component scores, 3 RAG flags, extension points
-- `docs/api.md` — every REST endpoint with request/response shapes
-- `docs/data-pipeline.md`
-- `docs/rag-pipeline.md`
-- `docs/deployment.md`
-- `docs/production-env.md`
-- `docs/screenshots.md`
-- `docs/portfolio-notes.md`
-
-## One-Command Local Setup
-
-```powershell
-docker compose up --build
-```
-
-Brings up Postgres with pgvector + the FastAPI backend on `http://127.0.0.1:8000`. Then run the frontend separately with `cd apps/frontend && npm run dev`.
-
-## Deployment Targets
-
-- Frontend: Vercel
-- Backend: Render
-- Database: Supabase Postgres
-- Optional background jobs: Upstash Redis
-
-See `docs/deployment.md` and `docs/production-env.md` for deployment steps and environment variable checklists.
-
-## Screenshots
-
-Screenshot placeholders are tracked in `docs/screenshots.md`. Add final images after the live deployment is seeded with demo data.
-
-## Future Improvements
-
-- Replace `FastAPI BackgroundTasks` with Upstash Redis + RQ for durable job execution
-- More provider adapters and model comparison reports
-- Organization/user authentication and multi-tenant projects
-- pgvector similarity search tuned against larger corpora
-- Playwright end-to-end dashboard tests on top of the existing Vitest harness
-
-## Resume Bullets This Project Supports
-
-- Built Agent Canary, a full-stack AI agent evaluation platform using Next.js, FastAPI, Supabase Postgres, LangGraph, and Gemini/Groq provider adapters to test agents against prompt injection, unsafe tool calls, structured output failures, and RAG failures.
-- Implemented a LangGraph evaluation workflow that runs adversarial test cases, validates model-generated tool calls with Pydantic and JSON Schema, applies policy rules, scores behavior, and persists step-level audit logs.
-- Designed an AI safety scoring system for schema validity, tool safety, policy compliance, approval correctness, groundedness, latency, and overall reliability.
-- Built a human-in-the-loop approval workflow for risky agent actions with approval queues, approve/reject APIs, reviewer notes, and immutable audit history.
-- Added RAG failure tests to detect weak retrieval, stale context, unsupported claims, and missing citations before AI-generated answers are considered safe.
+This is a portfolio project authored by Gaurav Singh. No commercial license is offered.
