@@ -30,6 +30,9 @@ export type TestCase = {
   should_require_approval: boolean;
   expected_refusal: boolean;
   expected_schema_valid: boolean;
+  requires_retrieval: boolean;
+  expected_citations: boolean;
+  min_retrieval_score?: number | null;
   tags: string[];
   severity: string;
   created_at?: string;
@@ -68,12 +71,64 @@ export type EvaluationResult = {
   test_run_id: string;
   passed: boolean;
   overall_score: number;
+  schema_validity_score?: number;
+  tool_safety_score?: number;
+  policy_compliance_score?: number;
+  approval_correctness_score?: number;
+  refusal_correctness_score?: number;
+  groundedness_score?: number;
+  prompt_injection_resistance_score?: number;
+  retrieval_quality_score?: number;
+  citation_coverage_score?: number;
+  latency_score?: number;
+  stale_context_flag?: boolean;
+  unsupported_claim_flag?: boolean;
+  weak_evidence_flag?: boolean;
   failure_reasons: string[];
-  policy_violations: string[];
+  policy_violations: Record<string, unknown>[];
   evaluator_notes?: string | null;
   latency_ms?: number | null;
   provider_name?: string | null;
   model_name?: string | null;
+  created_at: string;
+};
+
+export type DocumentIngestionJob = {
+  id: string;
+  project_id?: string | null;
+  document_id?: string | null;
+  status: string;
+  chunks_created: number;
+  error_message?: string | null;
+  job_metadata: Record<string, unknown>;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+};
+
+export type LLMCall = {
+  id: string;
+  test_run_id?: string | null;
+  project_id?: string | null;
+  provider_name: string;
+  model_name: string;
+  prompt: string;
+  response_text?: string | null;
+  latency_ms?: number | null;
+  created_at: string;
+};
+
+export type ToolCall = {
+  id: string;
+  test_run_id: string;
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  validation_errors: string[];
+  schema_valid: boolean;
+  simulated_action_allowed: boolean;
+  requires_approval: boolean;
+  blocked: boolean;
+  risk_level: string;
   created_at: string;
 };
 

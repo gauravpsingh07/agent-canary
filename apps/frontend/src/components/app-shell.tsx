@@ -4,12 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  AlertTriangle,
   Bot,
   CheckSquare,
   Database,
   FileSearch,
+  Flame,
   Gauge,
   Hammer,
+  Home,
   LayoutDashboard,
   ListChecks,
   ScrollText,
@@ -20,15 +23,18 @@ import {
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/", label: "Home", icon: Home, exact: true },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: Bot },
   { href: "/test-suites", label: "Test Suites", icon: ListChecks },
   { href: "/test-runs", label: "Test Runs", icon: Activity },
+  { href: "/failure-reports", label: "Failure Reports", icon: AlertTriangle },
   { href: "/policy-rules", label: "Policy Rules", icon: ShieldCheck },
   { href: "/tools", label: "Tool Registry", icon: Wrench },
   { href: "/approvals", label: "Approvals", icon: CheckSquare },
   { href: "/audit-logs", label: "Audit Logs", icon: ScrollText },
   { href: "/rag-documents", label: "RAG Documents", icon: Database },
+  { href: "/rag-documents/ingestion-jobs", label: "Ingestion Jobs", icon: Flame },
   { href: "/retrieval-results", label: "Retrieval", icon: FileSearch },
   { href: "/metrics", label: "Metrics", icon: Gauge }
 ];
@@ -48,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="space-y-1 p-3">
           {navItems.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link
